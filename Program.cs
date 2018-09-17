@@ -6,20 +6,50 @@ using System;
 using CoreGraphics;
 using System.Linq;
 using OpenTK;
+using Xamarin.Essentials;
+using ARKit_Csharp;
 
 namespace ARKitDemo
 {
 public class ARDelegate : ARSCNViewDelegate
 {
+        public event EventHandler<ImageDetection> ImageDetected;
+
 	public override void DidAddNode(ISCNSceneRenderer renderer, SCNNode node, ARAnchor anchor)
 	{
-		if (anchor != null && anchor is ARPlaneAnchor)
+   
+		if (anchor != null)
 		{
-			PlaceAnchorNode(node, anchor as ARPlaneAnchor);
+                if (anchor is ARPlaneAnchor)
+                    PlaceAnchorNode(node, anchor as ARPlaneAnchor);
+                else if (anchor is ARImageAnchor)
+                    PlaceMarkerCube(node, anchor as ARImageAnchor);
 		}
 	}
 
-	void PlaceAnchorNode(SCNNode node, ARPlaneAnchor anchor)
+        private void PlaceMarkerCube(SCNNode node, ARImageAnchor aRImageAnchor)
+        {
+            ImageDetected?.Invoke(this, new ImageDetection
+            {
+                Anchor = aRImageAnchor,
+            });
+
+            //var plane = SCNPlane.Create(aRImageAnchor.ReferenceImage.PhysicalSize.Width, aRImageAnchor.ReferenceImage.PhysicalSize.Height);
+            //var planeNode = SCNNode.FromGeometry(plane);
+            //planeNode.Position = new SCNVector3(aRImageAnchor.Transform.Column3.X, aRImageAnchor.Transform.Column3.Y,aRImageAnchor.Transform.Column3.Z);
+            //planeNode.Transform = SCNMatrix4.CreateRotationX((float)(Math.PI / 2.0));
+            //node.AddChildNode(planeNode);
+
+            ////Mark the anchor with a small red box
+            //var box = new SCNBox { Height = 0.5f, Width = 0.5f, Length =0.5f };
+            //box.FirstMaterial.Diffuse.ContentColor = UIColor.Green;
+            //var anchorNode = new SCNNode { Position = new SCNVector3(0, 0, 0), Geometry = box };
+            //planeNode.AddChildNode(anchorNode);
+        }
+
+
+
+        void PlaceAnchorNode(SCNNode node, ARPlaneAnchor anchor)
 	{
 		var plane = SCNPlane.Create(anchor.Extent.X, anchor.Extent.Z);
 		plane.FirstMaterial.Diffuse.Contents = UIColor.LightGray;
@@ -32,9 +62,8 @@ public class ARDelegate : ARSCNViewDelegate
 		node.AddChildNode(planeNode);
 
 		//Mark the anchor with a small red box
-		var box = new SCNBox { Height = 0.1f, Width = 0.1f, Length = 0.1f };
+		var box = new SCNBox { Height = 0.18f, Width = 0.18f, Length = 0.18f };
 		box.FirstMaterial.Diffuse.ContentColor = UIColor.Red;
-
 		var anchorNode = new SCNNode { Position = new SCNVector3(0, 0, 0), Geometry = box };
 		planeNode.AddChildNode(anchorNode);
 	}
@@ -66,10 +95,13 @@ public class ARDelegate : ARSCNViewDelegate
 		{
 			base.ViewDidLoad();
 
+            var arDel = new ARDelegate();
+            arDel.ImageDetected += ArDel_ImageDetected;
+
 			scnView = new ARSCNView()
 			{
 				Frame = this.View.Frame,
-				Delegate = new ARDelegate(),
+				Delegate = arDel,
 				DebugOptions = ARSCNDebugOptions.ShowFeaturePoints | ARSCNDebugOptions.ShowWorldOrigin,
 				UserInteractionEnabled = true
 			};
@@ -77,19 +109,50 @@ public class ARDelegate : ARSCNViewDelegate
 			this.View.AddSubview(scnView);
 		}
 
-		public override void ViewWillAppear(bool animated)
+        private void ArDel_ImageDetected(object sender, ImageDetection e)
+        {
+            Vibration.Vibrate();
+
+            var v = new SCNVector3(
+                e.Anchor.Transform.Column3.X,
+                e.Anchor.Transform.Column3.Y,
+                e.Anchor.Transform.Column3.Z);
+
+            PlaceCube(v);
+
+            scnView.Session.RemoveAnchor(e.Anchor);
+
+
+        }
+
+        public override void ViewWillAppear(bool animated)
 		{
 			base.ViewWillAppear(animated);
 
-			// Configure ARKit 
-			var config = new ARWorldTrackingConfiguration();
+            var images = GetDetectionImages();
+
+            // Configure ARKit 
+            var config = new ARWorldTrackingConfiguration();
 			config.PlaneDetection = ARPlaneDetection.Horizontal;
+            config.DetectionImages = images;
 
 			// This method is called subsequent to `ViewDidLoad` so we know `scnView` is instantiated
 			scnView.Session.Run(config, ARSessionRunOptions.RemoveExistingAnchors);
 		}
 
-		public override void TouchesBegan(NSSet touches, UIEvent evt)
+        /// <summary>
+        /// Images that the app will detect
+        /// </summary>
+        /// <returns></returns>
+        private NSSet<ARReferenceImage> GetDetectionImages()
+        {
+            var i = UIImage.FromBundle("marker_image").CGImage;
+            var r = new ARReferenceImage(i, ImageIO.CGImagePropertyOrientation.Up, 0.07f);
+            var set = new NSSet<ARReferenceImage>(r);
+            return set;
+        }
+
+        public override void TouchesBegan(NSSet touches, UIEvent evt)
 		{
 			base.TouchesBegan(touches, evt);
 			var touch = touches.AnyObject as UITouch;
@@ -131,8 +194,11 @@ public class ARDelegate : ARSCNViewDelegate
 			Func<string, SCNMaterial> LoadMaterial = fname =>
 			{
 				var mat = new SCNMaterial();
-				mat.Diffuse.Contents = UIImage.FromFile(fname);
-				mat.LocksAmbientWithDiffuse = true;
+                mat.Diffuse.Contents = UIImage.FromFile(fname);
+                //mat.Diffuse.ContentColor = UIColor.Green;
+                mat.LocksAmbientWithDiffuse = true;
+                mat.Transparency = 0.6f;
+                mat.TransparencyMode = SCNTransparencyMode.SingleLayer;
 				return mat;
 			};
 
@@ -146,12 +212,13 @@ public class ARDelegate : ARSCNViewDelegate
 		SCNNode PlaceCube(SCNVector3 pos)
 		{
 			var box = new SCNBox { Width = 0.25f, Height = 0.25f, Length = 0.25f };
-			var cubeNode = new SCNNode { Position = pos, Geometry = box };
-			cubeNode.Geometry.Materials = LoadMaterials();
-			scnView.Scene.RootNode.AddChildNode(cubeNode);
-			return cubeNode;
-		}
-	}
+            
+            var cubeNode = new SCNNode { Position = pos, Geometry = box };
+            cubeNode.Geometry.Materials = LoadMaterials();
+            scnView.Scene.RootNode.AddChildNode(cubeNode);
+            return cubeNode;
+        }
+    }
 
     [Register ("AppDelegate")]
     public class AppDelegate : UIApplicationDelegate
