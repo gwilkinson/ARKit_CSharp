@@ -107,18 +107,6 @@
     <ImageAsset Include="Assets.xcassets\marker_image.imageset\iphone-5.53.jpg">
       <Visible>false</Visible>
     </ImageAsset>
-    <ImageAsset Include="Assets.xcassets\marker_image.imageset\marker_image.png">
-      <Visible>false</Visible>
-    </ImageAsset>
-    <ImageAsset Include="Assets.xcassets\marker_image.imageset\marker_image1.png">
-      <Visible>false</Visible>
-    </ImageAsset>
-    <ImageAsset Include="Assets.xcassets\marker_image.imageset\marker_image2.png">
-      <Visible>false</Visible>
-    </ImageAsset>
-    <ImageAsset Include="Assets.xcassets\marker_image.imageset\square.pdf">
-      <Visible>false</Visible>
-    </ImageAsset>
   </ItemGroup>
   <ItemGroup />
   <ItemGroup>

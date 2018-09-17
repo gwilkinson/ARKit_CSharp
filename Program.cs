@@ -224,7 +224,6 @@ public class ARDelegate : ARSCNViewDelegate
     public class AppDelegate : UIApplicationDelegate
     {
         UIWindow window;
-        ARKitController viewController;
 
         public override bool FinishedLaunching (UIApplication app, NSDictionary options)
         {
